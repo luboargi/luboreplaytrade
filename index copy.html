@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lubo — Trading Journal</title>
+<title>Lubo — Replay Trading Journal</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -316,39 +316,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   .weekly-sidebar{display:none}
   .growth-panel{grid-template-columns:1fr}
 }
-
-/* ---- PIN GATE ---- */
-.pin-gate{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
-.pin-gate-box{background:var(--surface);border:1px solid var(--border2);border-radius:18px;padding:36px 32px;width:100%;max-width:340px;text-align:center}
-.pin-gate-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;background:linear-gradient(135deg,#fff 30%,var(--gold) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:6px}
-.pin-gate-sub{font-size:12px;color:var(--muted);margin-bottom:22px}
-.pin-gate-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:14px;color:var(--text);font-size:22px;text-align:center;letter-spacing:8px;outline:none;font-family:'DM Sans',sans-serif;margin-bottom:14px}
-.pin-gate-input:focus{border-color:var(--gold)}
-.pin-gate-btn{width:100%;padding:12px;background:linear-gradient(135deg,var(--gold),var(--gold-dim));color:#000;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer}
-.pin-gate-error{font-size:12px;color:var(--red);margin-top:10px;min-height:16px}
-.pin-gate-loading{font-size:12px;color:var(--muted);margin-top:10px}
-.app-hidden{display:none!important}
 </style>
 </head>
 <body>
 
-<!-- PIN GATE -->
-<div class="pin-gate" id="pinGate">
-  <div class="pin-gate-box">
-    <div class="pin-gate-title">📈 Lubo Trading</div>
-    <div class="pin-gate-sub">PIN girerek journal'a eriş</div>
-    <input type="password" inputmode="numeric" class="pin-gate-input" id="pinInput" maxlength="8" placeholder="••••" autofocus>
-    <button class="pin-gate-btn" onclick="checkPin()">Giriş Yap</button>
-    <div class="pin-gate-error" id="pinError"></div>
-    <div class="pin-gate-loading" id="pinLoading" style="display:none">Yükleniyor...</div>
-  </div>
-</div>
-
-<div id="appRoot" class="app-hidden">
-
 <!-- NAV -->
 <nav class="nav">
-  <div class="nav-brand">📈 Lubo Trading</div>
+  <div class="nav-brand">📈 Lubo Replay Trading</div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('journal',this)">📅 Journal</button>
     <button class="nav-tab" onclick="showPage('log',this)">📋 Log</button>
@@ -604,208 +578,29 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 
 <div class="toast" id="toast"></div>
 
-</div><!-- /#appRoot -->
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
-// ===================== SUPABASE CONFIG =====================
-const SUPABASE_URL = 'https://zosjajevnptqxdcmyjlq.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpvc2phamV2bnB0cXhkY215amxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2OTYzMzgsImV4cCI6MjEwMTI3MjMzOH0.DDgtu9POHAz2J42pZ5-Iyv-MJPFgEsrrm-nb-cMTYpE';
-const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ===================== PIN GATE =====================
-// PIN is hashed with a simple check against a stored hash in localStorage.
-// First time ever opening the app (no hash saved yet), whatever PIN you type becomes your PIN.
-const PIN_HASH_KEY = 'lubo_pin_hash_v1';
-const SESSION_UNLOCKED_KEY = 'lubo_session_unlocked_v1';
-
-async function sha256Hex(str){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
-async function checkPin(){
-  const val = document.getElementById('pinInput').value.trim();
-  const errEl = document.getElementById('pinError');
-  if(!val){ errEl.textContent = 'PIN girmelisin.'; return; }
-
-  const storedHash = localStorage.getItem(PIN_HASH_KEY);
-  const inputHash = await sha256Hex(val);
-
-  if(!storedHash){
-    // First-ever use on this browser: set this as the PIN
-    if(val.length < 4){ errEl.textContent = 'PIN en az 4 karakter olmalı.'; return; }
-    if(!confirm(`Bu PIN'i kaydetmek istiyor musun? (${val})\nBunu unutma!`)) return;
-    localStorage.setItem(PIN_HASH_KEY, inputHash);
-    unlockApp();
-    return;
-  }
-
-  if(inputHash === storedHash){
-    unlockApp();
-  } else {
-    errEl.textContent = '❌ Yanlış PIN.';
-    document.getElementById('pinInput').value = '';
-  }
-}
-
-document.getElementById('pinInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') checkPin(); });
-
-async function unlockApp(){
-  sessionStorage.setItem(SESSION_UNLOCKED_KEY, '1');
-  document.getElementById('pinGate').style.display = 'none';
-  document.getElementById('appRoot').classList.remove('app-hidden');
-  await initApp();
-}
-
-// Auto-unlock if already unlocked this session (avoids re-entering PIN on every tab/reload)
-(function checkSessionUnlock(){
-  if(sessionStorage.getItem(SESSION_UNLOCKED_KEY) === '1'){
-    document.getElementById('pinGate').style.display = 'none';
-    document.getElementById('appRoot').classList.remove('app-hidden');
-    initApp();
-  }
-})();
-
-
+// ===================== STORAGE KEYS =====================
+const STORAGE_KEY  = 'lubo_trades_v1';   // SAME KEY — trades preserved!
+const SETTINGS_KEY = 'lubo_settings_v1';
 const DEFAULT_BAL  = 50000;
 const DEFAULT_CUR  = '€';
 const DEFAULT_START= '2026-05-25';
 
-// Old localStorage keys — used ONLY for one-time migration into Supabase
-const OLD_STORAGE_KEY  = 'lubo_trades_v1';
-const OLD_SETTINGS_KEY = 'lubo_settings_v1';
-const MIGRATION_DONE_KEY = 'lubo_migrated_to_supabase_v1';
-
-// ===================== STORAGE (Supabase-backed) =====================
-async function loadTradesFromSupabase(){
-  const { data, error } = await supa.from('trades').select('*').order('date', { ascending: true });
-  if(error){ console.error('Load trades error', error); showToast('Trade yükleme hatası','error'); return []; }
-  // map DB column names back to app's expected field names
-  return (data||[]).map(r => ({
-    id: r.id,
-    date: r.date,
-    instrument: r.instrument,
-    session: r.session,
-    direction: r.direction,
-    pnl: parseFloat(r.pnl),
-    lots: r.lots!==null ? parseFloat(r.lots) : null,
-    entry: r.entry!==null ? parseFloat(r.entry) : null,
-    exitPrice: r.exit_price!==null ? parseFloat(r.exit_price) : null,
-    notes: r.notes || '',
-    createdAt: r.created_at
-  }));
-}
-
-async function loadSettingsFromSupabase(){
-  const { data, error } = await supa.from('journal_settings').select('*').eq('id',1).maybeSingle();
-  if(error){ console.error('Load settings error', error); }
-  if(!data) return { balance: DEFAULT_BAL, currency: DEFAULT_CUR, startDate: DEFAULT_START };
-  return {
-    balance: data.balance!==null ? parseFloat(data.balance) : DEFAULT_BAL,
-    currency: data.currency || DEFAULT_CUR,
-    startDate: data.start_date || DEFAULT_START
-  };
-}
-
-async function insertTradeToSupabase(t){
-  const { error } = await supa.from('trades').insert({
-    id: t.id, date: t.date, instrument: t.instrument, session: t.session,
-    direction: t.direction, pnl: t.pnl, lots: t.lots, entry: t.entry,
-    exit_price: t.exitPrice, notes: t.notes, created_at: t.createdAt
-  });
-  if(error){ console.error('Insert trade error', error); showToast('Kayıt hatası: '+error.message,'error'); return false; }
-  return true;
-}
-
-async function updateTradeInSupabase(t){
-  const { error } = await supa.from('trades').update({
-    date: t.date, instrument: t.instrument, session: t.session,
-    direction: t.direction, pnl: t.pnl, lots: t.lots, entry: t.entry,
-    exit_price: t.exitPrice, notes: t.notes
-  }).eq('id', t.id);
-  if(error){ console.error('Update trade error', error); showToast('Güncelleme hatası: '+error.message,'error'); return false; }
-  return true;
-}
-
-async function deleteTradeFromSupabase(id){
-  const { error } = await supa.from('trades').delete().eq('id', id);
-  if(error){ console.error('Delete trade error', error); showToast('Silme hatası: '+error.message,'error'); return false; }
-  return true;
-}
-
-async function deleteAllTradesFromSupabase(){
-  const { error } = await supa.from('trades').delete().neq('id','__none__');
-  if(error){ console.error('Delete all error', error); return false; }
-  return true;
-}
-
-async function upsertSettingsToSupabase(s){
-  const { error } = await supa.from('journal_settings').upsert({
-    id: 1, balance: s.balance, currency: s.currency, start_date: s.startDate
-  });
-  if(error){ console.error('Save settings error', error); showToast('Ayar kaydetme hatası','error'); return false; }
-  return true;
-}
-
-// ===================== ONE-TIME MIGRATION FROM localStorage =====================
-async function migrateLocalDataToSupabaseIfNeeded(){
-  if(localStorage.getItem(MIGRATION_DONE_KEY) === '1') return;
-
-  let oldTrades = [];
-  let oldSettings = null;
-  try {
-    const rawTrades = localStorage.getItem(OLD_STORAGE_KEY);
-    oldTrades = rawTrades ? JSON.parse(rawTrades) : [];
-    const rawSettings = localStorage.getItem(OLD_SETTINGS_KEY);
-    oldSettings = rawSettings ? JSON.parse(rawSettings) : null;
-  } catch(e){}
-
-  if(oldTrades.length === 0 && !oldSettings){
-    // nothing to migrate on this device — mark done so we don't check again
-    localStorage.setItem(MIGRATION_DONE_KEY, '1');
-    return;
-  }
-
-  document.getElementById('pinLoading').style.display = 'block';
-  document.getElementById('pinLoading').textContent = `${oldTrades.length} eski trade Supabase'e taşınıyor...`;
-
-  // Check if Supabase already has trades (avoid double-migrating / duplicating on a 2nd device)
-  const { count } = await supa.from('trades').select('*', { count: 'exact', head: true });
-  if((count||0) === 0 && oldTrades.length > 0){
-    for(const t of oldTrades){
-      await insertTradeToSupabase(t);
-    }
-  }
-  if(oldSettings){
-    const { data: existingSettings } = await supa.from('journal_settings').select('id').eq('id',1).maybeSingle();
-    if(!existingSettings){
-      await upsertSettingsToSupabase(oldSettings);
-    }
-  }
-
-  localStorage.setItem(MIGRATION_DONE_KEY, '1');
-  document.getElementById('pinLoading').style.display = 'none';
-}
+// ===================== STORAGE =====================
+function loadTrades()   { try { const r=localStorage.getItem(STORAGE_KEY);  return r?JSON.parse(r):[]; } catch(e){return[];} }
+function loadSettings() { try { const r=localStorage.getItem(SETTINGS_KEY); return r?JSON.parse(r):{balance:DEFAULT_BAL,currency:DEFAULT_CUR,startDate:DEFAULT_START}; } catch(e){return{balance:DEFAULT_BAL,currency:DEFAULT_CUR,startDate:DEFAULT_START};} }
+function saveTrades(t)  { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(t)); } catch(e){showToast('Storage error!','error');} }
+function saveSettingsData(s){ try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(e){showToast('Storage error!','error');} }
 
 // ===================== STATE =====================
-let trades = [];
-let settings = { balance: DEFAULT_BAL, currency: DEFAULT_CUR, startDate: DEFAULT_START };
+let trades = loadTrades();
+let settings = loadSettings();
 let currentYear  = new Date().getFullYear();
 let currentMonth = new Date().getMonth(); // 0-indexed
 let editingId = null;
 let selectedDirection = 'LONG';
 let currentFilter = 'all';
 let dayModalDate = null;
-
-// Called after PIN is accepted — migrates old data if needed, then loads everything from Supabase
-async function initApp(){
-  await migrateLocalDataToSupabaseIfNeeded();
-  trades = await loadTradesFromSupabase();
-  settings = await loadSettingsFromSupabase();
-  if(typeof questBackfillExistingTrades==='function') questBackfillExistingTrades();
-  renderCalendar();
-}
 
 // ===================== UTILS =====================
 function genId()       { return Date.now().toString(36)+Math.random().toString(36).substr(2); }
@@ -1069,7 +864,7 @@ function editTrade(id){
   document.getElementById('tradeModal').classList.add('open');
 }
 
-async function saveTrade(){
+function saveTrade(){
   const date=document.getElementById('f-date').value;
   const pnlRaw=document.getElementById('f-pnl').value;
   if(!date){ showToast('Please enter a date!','error'); return; }
@@ -1087,32 +882,20 @@ async function saveTrade(){
     notes:     document.getElementById('f-notes').value.trim(),
     createdAt: Date.now()
   };
-
-  document.getElementById('submitBtn').textContent = 'Kaydediliyor...';
-  document.getElementById('submitBtn').disabled = true;
-
-  const ok = isNew ? await insertTradeToSupabase(trade) : await updateTradeInSupabase(trade);
-
-  document.getElementById('submitBtn').disabled = false;
-  document.getElementById('submitBtn').textContent = isNew ? 'Save Trade' : 'Update Trade';
-
-  if(!ok) return; // error toast already shown
-
   if(editingId){ const idx=trades.findIndex(t=>t.id===editingId); if(idx!==-1) trades[idx]=trade; }
   else trades.push(trade);
-
+  saveTrades(trades);
   closeModal('tradeModal');
   renderCalendar();
   if(isNew && typeof questProcessNewTrade==='function') questProcessNewTrade(trade);
   showToast(editingId?'Trade updated! ✅':'Trade saved! ✅');
 }
 
-async function deleteTrade(){
+function deleteTrade(){
   if(!editingId) return;
   if(!confirm('Delete this trade?')) return;
-  const ok = await deleteTradeFromSupabase(editingId);
-  if(!ok) return;
   trades=trades.filter(t=>t.id!==editingId);
+  saveTrades(trades);
   closeModal('tradeModal');
   renderCalendar();
   showToast('Trade deleted','error');
@@ -1177,23 +960,21 @@ function loadSettingsUI(){
   document.getElementById('s-currency').value = settings.currency ||DEFAULT_CUR;
   document.getElementById('s-startdate').value= settings.startDate||DEFAULT_START;
 }
-async function saveSettings(){
+function saveSettings(){
   settings={
     balance:  parseFloat(document.getElementById('s-balance').value)||DEFAULT_BAL,
     currency: document.getElementById('s-currency').value||DEFAULT_CUR,
     startDate:document.getElementById('s-startdate').value||DEFAULT_START
   };
-  const ok = await upsertSettingsToSupabase(settings);
-  if(!ok) return;
+  saveSettingsData(settings);
   showToast('Settings saved! ✅');
   renderCalendar();
 }
-async function clearAllTrades(){
+function clearAllTrades(){
   if(!confirm('Delete ALL trades permanently?')) return;
   if(!confirm('Last warning — cannot be undone!')) return;
-  const ok = await deleteAllTradesFromSupabase();
-  if(!ok) return;
   trades=[];
+  saveTrades(trades);
   renderCalendar();
   showToast('All trades cleared','error');
 }
@@ -1234,7 +1015,7 @@ function importAllData(event){
   const statusEl = document.getElementById('importStatus');
 
   const reader = new FileReader();
-  reader.onload = async function(e){
+  reader.onload = function(e){
     try {
       const data = JSON.parse(e.target.result);
 
@@ -1247,26 +1028,20 @@ function importAllData(event){
 
       const tradeCount = Array.isArray(data.trades) ? data.trades.length : 0;
       const hasQuest = !!data.quest;
-      const confirmMsg = `Import ${tradeCount} trades${hasQuest ? ' + Quest progress' : ''}?\n\nThis will REPLACE whatever is currently in Supabase.`;
+      const confirmMsg = `Import ${tradeCount} trades${hasQuest ? ' + Quest progress' : ''}?\n\nThis will REPLACE whatever is currently in this browser.`;
       if(!confirm(confirmMsg)) { event.target.value = ''; return; }
 
-      statusEl.textContent = 'Yükleniyor...';
-      statusEl.style.color = 'var(--muted)';
-
-      // Wipe existing Supabase trades, then insert all imported trades
-      await deleteAllTradesFromSupabase();
+      // Write trades
       if(Array.isArray(data.trades)){
-        for(const t of data.trades){
-          await insertTradeToSupabase(t);
-        }
         trades = data.trades;
+        saveTrades(trades);
       }
       // Write settings
       if(data.settings){
         settings = data.settings;
-        await upsertSettingsToSupabase(settings);
+        saveSettingsData(settings);
       }
-      // Write quest data directly to its storage key (quest system stays localStorage-based per device)
+      // Write quest data directly to its storage key
       if(data.quest){
         try { localStorage.setItem(QUEST_KEY, JSON.stringify(data.quest)); } catch(err){}
       }
@@ -1867,11 +1642,10 @@ function questBackfillExistingTrades(){
   });
   if(changed) saveQuest(quest);
 }
-// questBackfillExistingTrades() now runs inside initApp(), after trades are loaded from Supabase
+questBackfillExistingTrades();
 
 // ===================== INIT =====================
-// App does NOT auto-render here anymore — initApp() is called from unlockApp()
-// after successful PIN entry (see top of script), which loads trades from Supabase first.
+renderCalendar();
 </script>
 </body>
 </html>
