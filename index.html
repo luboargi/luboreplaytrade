@@ -335,9 +335,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 <!-- PIN GATE -->
 <div class="pin-gate" id="pinGate">
   <div class="pin-gate-box">
-    <div class="pin-gate-title">📈 Lubo Replay Trading</div>
-    <div class="pin-gate-sub">PIN girerek journal'a eriş</div>
-    <input type="password" inputmode="numeric" class="pin-gate-input" id="pinInput" maxlength="8" placeholder="••••" autofocus>
+    <div class="pin-gate-title">📈 Lubo Trading</div>
+    <div class="pin-gate-sub">Şifreni girerek journal'a eriş</div>
+    <input type="password" class="pin-gate-input" id="pinInput" style="letter-spacing:2px;font-size:16px" placeholder="Şifre" autofocus>
     <button class="pin-gate-btn" onclick="checkPin()">Giriş Yap</button>
     <div class="pin-gate-error" id="pinError"></div>
     <div class="pin-gate-loading" id="pinLoading" style="display:none">Yükleniyor...</div>
@@ -348,7 +348,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 
 <!-- NAV -->
 <nav class="nav">
-  <div class="nav-brand">📈 Lubo Replay Trading</div>
+  <div class="nav-brand">📈 Lubo Trading</div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('journal',this)">📅 Journal</button>
     <button class="nav-tab" onclick="showPage('log',this)">📋 Log</button>
@@ -362,7 +362,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 <div id="page-journal" class="page active">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
     <div>
-      <div class="page-title">Replay Trading Journal</div>
+      <div class="page-title">Trading Journal</div>
       <div class="page-sub">Paper Trading • Gold & DAX • Session Breakout Strategy</div>
     </div>
     <button class="add-btn" onclick="openAddModal()">＋ Add Trade</button>
@@ -396,8 +396,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   <div class="page-sub">All recorded trades — full history</div>
   <div class="log-filters">
     <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-    <button class="filter-btn" onclick="setFilter('NASDAQ',this)">NASDAQ</button>
-    <button class="filter-btn" onclick="setFilter('NIKKEI',this)">NIKKEI</button>
     <button class="filter-btn" onclick="setFilter('XAUUSD',this)">Gold</button>
     <button class="filter-btn" onclick="setFilter('GER40',this)">DAX</button>
     <button class="filter-btn" onclick="setFilter('win',this)">Wins</button>
@@ -537,18 +535,21 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
       <div class="form-group">
         <label class="form-label">Instrument</label>
         <select class="form-select" id="f-instrument">
-          <option value="NIKKEI">NIKKEI</option>
-          <option value="NASDAQ">NASDAQ — Nasdaq</option>
           <option value="XAUUSD">XAUUSD — Gold</option>
           <option value="GER40">GER40 — DAX</option>
-          <option value="BTCUSD">BTCUSD — Bitcoin</option>          
+          <option value="BTCUSD">BTCUSD — Bitcoin</option>
+          <option value="NAS100">NAS100 — Nasdaq</option>
+          <option value="EURUSD">EUR/USD</option>
+          <option value="GBPUSD">GBP/USD</option>
+          <option value="OTHER">Other</option>
         </select>
       </div>
       <div class="form-group">
         <label class="form-label">Session</label>
         <select class="form-select" id="f-session">
-          <option value="6:30 AM">6:30 AM — Nikkei Session</option>
-          <option value="8:00 AM">8:00 AM — London Open</option>          
+          <option value="5:30 AM">5:30 AM — Tokyo Fix</option>
+          <option value="8:00 AM">8:00 AM — London Open</option>
+          <option value="11:00 AM">11:00 AM — Mid London</option>
           <option value="1:30 PM">1:30 PM — NY Open</option>
           <option value="2:30 PM">2:30 PM — Mid NY</option>
           <option value="Other">Other</option>
@@ -613,9 +614,11 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===================== PIN GATE =====================
-// PIN is hashed with a simple check against a stored hash in localStorage.
-// First time ever opening the app (no hash saved yet), whatever PIN you type becomes your PIN.
-const PIN_HASH_KEY = 'lubo_pin_hash_v1';
+// Fixed password check: only whoever knows the correct password can get in.
+// The password itself is never stored in plain text — only its SHA-256 hash is embedded here,
+// and the entered password is hashed and compared against it. Nobody can "set" a new password
+// by simply being first to open the app.
+const FIXED_PASSWORD_HASH = 'd8554f9b25cb64a8b07415af3fb92ce15eceea7b2e3db59c6d3ac272eb83cb7d';
 const SESSION_UNLOCKED_KEY = 'lubo_session_unlocked_v1';
 
 async function sha256Hex(str){
@@ -626,24 +629,14 @@ async function sha256Hex(str){
 async function checkPin(){
   const val = document.getElementById('pinInput').value.trim();
   const errEl = document.getElementById('pinError');
-  if(!val){ errEl.textContent = 'PIN girmelisin.'; return; }
+  if(!val){ errEl.textContent = 'Şifre girmelisin.'; return; }
 
-  const storedHash = localStorage.getItem(PIN_HASH_KEY);
   const inputHash = await sha256Hex(val);
 
-  if(!storedHash){
-    // First-ever use on this browser: set this as the PIN
-    if(val.length < 4){ errEl.textContent = 'PIN en az 4 karakter olmalı.'; return; }
-    if(!confirm(`Bu PIN'i kaydetmek istiyor musun? (${val})\nBunu unutma!`)) return;
-    localStorage.setItem(PIN_HASH_KEY, inputHash);
-    unlockApp();
-    return;
-  }
-
-  if(inputHash === storedHash){
+  if(inputHash === FIXED_PASSWORD_HASH){
     unlockApp();
   } else {
-    errEl.textContent = '❌ Yanlış PIN.';
+    errEl.textContent = '❌ Yanlış şifre.';
     document.getElementById('pinInput').value = '';
   }
 }
@@ -657,7 +650,7 @@ async function unlockApp(){
   await initApp();
 }
 
-// Auto-unlock if already unlocked this session (avoids re-entering PIN on every tab/reload)
+// Auto-unlock if already unlocked this session (avoids re-entering password on every tab/reload)
 (function checkSessionUnlock(){
   if(sessionStorage.getItem(SESSION_UNLOCKED_KEY) === '1'){
     document.getElementById('pinGate').style.display = 'none';
